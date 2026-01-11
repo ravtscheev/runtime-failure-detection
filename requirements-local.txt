@@ -1,0 +1,5 @@
+-e third_party/mimicgen
+# Specified by mimicgen
+-e third_party/robosuite
+-e third_party/robomimic 
+mujoco==2.3.2
