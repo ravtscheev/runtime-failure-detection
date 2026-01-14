@@ -1,0 +1,14 @@
+# Configuration for converting LeRobot HDF5 datasets
+fps: 20
+robot_type: "ur5e"
+task: "Do something"
+task_mapping:
+  "square_d1_ur5e.hdf5": "Pick a square nut and place on a peg"
+  "threading_d1_ur5e.hdf5": "Pick a needle and thread through a hole on a tripod."
+
+# Repository configuration
+repo_id: "lerobot/ur5e-square-nut-pick-place-v1"
+
+# Batch processing configuration
+batch_size: 4
+validate_batch_size: true  # Set false to allow partial batches

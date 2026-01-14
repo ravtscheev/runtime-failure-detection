@@ -26,6 +26,13 @@ First we need to install the dependencies:
 uv pip install -r requirements-local.txt
 ```
 
+## Convert HDF5 to LeRobot Format
+To convert LeRobot HDF5 datasets into the required format, provide the necessary configuration in `configs/lerobot_convert.yaml` and then run:
+
+```
+uv run scripts/convert_hdf5_lerobot.py
+```
+
 # Acknowledgements
 
 This project builds on open-source work including:
