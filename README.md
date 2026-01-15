@@ -33,10 +33,23 @@ To convert LeRobot HDF5 datasets into the required format, provide the necessary
 uv run scripts/convert_hdf5_lerobot.py --config configs/lerobot_convert.yaml
 ```
 
+If you want to upload the converted files to HuggingFace, you first need to login:
+
+```
+hf auth login
+```
+
+Uploading a dataset after conversion can be done by:
+
+```
+hf upload {path/to/dataset_folder} --repo-id {username/my-cool-dataset} --repo-type dataset
+```
+
 # Acknowledgements
 
 This project builds on open-source work including:
 - MimicGen
+- LeRobot
 
 I am grateful to the authors and maintainers of these projects.
 
