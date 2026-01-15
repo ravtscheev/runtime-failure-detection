@@ -4,32 +4,29 @@ LeRobot Dataset Converter
 Converts HDF5 episode files to LeRobot dataset format for Hugging Face Hub.
 
 Usage:
-    python convert_lerobot.py --config config.yaml [--input FILE_OR_DIR]
-    
-    Examples:
-        # Convert a single file
-        python convert_lerobot.py --config config.yaml --input /path/to/episode_0.hdf5
-        
-        # Convert all HDF5 files in a directory (recursively)
-        python convert_lerobot.py --config config.yaml --input /path/to/data
-        
-        # Default: Use all HDF5 files from ./mimicgen_generated (recursively)
-        python convert_lerobot.py --config config.yaml
+    # 1. Fully manual (Tyro validates required args):
+    python convert_lerobot.py --repo-id user/dataset --input-path ./data/raw
+
+    # 2. Config file (Tyro loads defaults from YAML):
+    python convert_lerobot.py --config config.yaml
+
+    # 3. Config file + Overrides (CLI args take precedence):
+    python convert_lerobot.py --config config.yaml --input-path ./data/new_batch --push-to-hub
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import shutil
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Union
 
-import cv2
 import h5py
 import numpy as np
+import torch
+import dacite
 import tyro
 import yaml
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -40,37 +37,58 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class LeRobotConfig:
+    """Configuration for LeRobot Dataset Conversion."""
+
+    # Required Fields
+    repo_id: str
+    """Hugging Face repository ID (e.g., 'username/dataset-name')."""
+
+    input_path: Path
+    """Path to input HDF5 file or directory."""
+
+    # Optional Fields with Defaults
+    fps: int = 20
+    """Frames per second for the dataset."""
+
+    robot_type: Optional[str] = None
+    """Type of robot (e.g., 'panda', 'ur5')."""
+
+    push_to_hub: bool = False
+    """Whether to push the dataset to the Hub after conversion."""
+
+    private_repo: bool = False
+    """Make the repository private when pushing."""
+
+    tags: Optional[List[str]] = None
+    """Optional tags for the Hugging Face Hub."""
+
+    output_dir: Path = Path("./data/lerobot_formatted")
+    """Directory to save the formatted dataset."""
+
+    batch_size: int = 1
+    """Batch size for processing frames."""
+
+    task: str = "unknown"
+    """Default task name if mapping is not found."""
+
+    task_mapping: Optional[Union[Dict[str, str], List[str]]] = None
+    """Mapping of files to tasks. Can be a dict (filename->task) or list (order-based)."""
+
+
 class LeRobotDatasetConverter:
     """Converter for transforming HDF5 robot demonstration data to LeRobot format."""
-    
-    def __init__(self, config: dict[str, Any], input_path: str | Path | None = None) -> None:
-        """Initialize the converter with configuration.
-        
-        Args:
-            config: Configuration dictionary containing repo_id, fps, robot_type, etc.
-            input_path: Path to input HDF5 file or directory. Defaults to ../data/mimicgen_generated.
-        """
-        self.config: dict[str, Any] = config
-        self.repo_id: str = config["repo_id"]
-        self.fps: int = config.get("fps", 20)
-        self.robot_type: str | None = config.get("robot_type", None)
-        
-        # Determine input path
-        self.input_path: Path = Path(input_path) if input_path else Path("../data/mimicgen_generated")
-        
-        # Create timestamped output directory to avoid overriding
+
+    def __init__(self, config: LeRobotConfig) -> None:
+        """Initialize the converter with a validated configuration object."""
+        self.cfg = config
+
+        # Create timestamped output directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_output_dir = Path(config.get("output_dir", "./data/lerobot_formatted"))
-        self.output_dir: Path = base_output_dir / f"conversion_{timestamp}"
-        self.batch_size: int = config.get("batch_size", 1)
-        self.task: str = config.get("task", "unknown")
-        
-        # Task mapping: maps file patterns or indices to task names
-        # Format can be:
-        # - dict mapping filename patterns to tasks: {"file1.hdf5": "task1", "file2.hdf5": "task2"}
-        # - list of tasks applied in order to sorted files: ["task1", "task2", "task3"]
-        self.task_mapping: dict[str, str] | list[str] | None = config.get("task_mapping", None)
-        
+        self.output_path: Path = self.cfg.output_dir / f"conversion_{timestamp}"
+
+        # Define features (Standard LeRobot structure)
         self.features: dict[str, dict[str, Any]] = {
             "observation.images.camera_base": {
                 "dtype": "video",
@@ -85,267 +103,302 @@ class LeRobotDatasetConverter:
             "observation.state": {
                 "dtype": "float32",
                 "shape": (7,),
-                "names": {"motors": ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "gripper"]},
+                "names": {
+                    "motors": [
+                        "joint0",
+                        "joint1",
+                        "joint2",
+                        "joint3",
+                        "joint4",
+                        "joint5",
+                        "gripper",
+                    ]
+                },
             },
             "action": {
                 "dtype": "float32",
                 "shape": (7,),
-                "names": {"motors": ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "gripper"]},
+                "names": {
+                    "motors": [
+                        "joint0",
+                        "joint1",
+                        "joint2",
+                        "joint3",
+                        "joint4",
+                        "joint5",
+                        "gripper",
+                    ]
+                },
             },
         }
 
     def get_task_for_file(self, file_path: Path, file_index: int) -> str:
-        """Get the task name for a given HDF5 file.
-        
-        Args:
-            file_path: Path to the HDF5 file.
-            file_index: Index of the file in the sorted list of files.
-            
-        Returns:
-            Task name for this file.
-        """
-        if self.task_mapping is None:
-            return self.task
-        
-        # If task_mapping is a list, use index
-        if isinstance(self.task_mapping, list):
-            if file_index < len(self.task_mapping):
-                return self.task_mapping[file_index]
-            else:
-                logger.warning(f"File index {file_index} exceeds task_mapping list length. Using default task.")
-                return self.task
-        
-        # If task_mapping is a dict, try to match filename
-        if isinstance(self.task_mapping, dict):
-            filename = file_path.name
-            # Try exact match first
-            if filename in self.task_mapping:
-                return self.task_mapping[filename]
-            # Try pattern matching
-            for pattern, task in self.task_mapping.items():
-                if pattern in filename:
-                    return task
-            logger.warning(f"No task mapping found for {filename}. Using default task.")
-            return self.task
-        
-        return self.task
+        """Get the task name for a given HDF5 file using the config mapping."""
+        mapping = self.cfg.task_mapping
 
-    def _validate_batch_size(self, num_episodes: int) -> None:
-        """Check if episode count is divisible by batch size.
-        
-        Args:
-            num_episodes: Total number of episodes to validate.
-            
-        Raises:
-            ValueError: If episodes cannot be evenly divided by batch size.
-        """
-        if num_episodes % self.batch_size != 0:
-            raise ValueError(
-                f"Cannot divide {num_episodes} episodes into batches of {self.batch_size}. "
-                f"Please adjust batch_size in config or number of episodes."
-            )
-        logger.info(f"Using batch size: {self.batch_size}")
+        if mapping is None:
+            return self.cfg.task
+
+        # List-based mapping (index matching)
+        if isinstance(mapping, list):
+            if file_index < len(mapping):
+                return mapping[file_index]
+            else:
+                logger.warning(
+                    f"File index {file_index} exceeds task_mapping length. Using default task."
+                )
+                return self.cfg.task
+
+        # Dict-based mapping (filename matching)
+        if isinstance(mapping, dict):
+            filename = file_path.name
+            # Exact match
+            if filename in mapping:
+                return mapping[filename]
+            # Pattern match
+            for pattern, task_name in mapping.items():
+                if pattern in filename:
+                    return task_name
+
+            logger.warning(f"No task mapping found for {filename}. Using default task.")
+            return self.cfg.task
+
+        return self.cfg.task
 
     def create_dataset(self) -> LeRobotDataset:
-        """Create LeRobot dataset with configured parameters.
-        
-        Returns:
-            Initialized LeRobotDataset ready for adding frames.
-        """
-        logger.info(f"Creating dataset in: {self.output_dir}")
-            
+        """Create LeRobot dataset with configured parameters."""
+        logger.info(f"Creating dataset in: {self.output_path}")
+
         return LeRobotDataset.create(
-            repo_id=self.repo_id,
-            fps=self.fps,
+            repo_id=self.cfg.repo_id,
+            fps=self.cfg.fps,
             features=self.features,
-            root=self.output_dir,
-            robot_type=self.robot_type,
+            root=self.output_path,
+            robot_type=self.cfg.robot_type,
             use_videos=True,
             image_writer_processes=4,
             image_writer_threads=16,
-            batch_encoding_size=self.batch_size,
+            batch_encoding_size=self.cfg.batch_size,
         )
 
-    def process_episode(self, hdf5_path: Path, dataset: LeRobotDataset, file_task: str) -> int:
-        """Process HDF5 file containing demo_* folders.
-        
-        Args:
-            hdf5_path: Path to the HDF5 file to process.
-            dataset: LeRobotDataset instance to add frames to.
-            file_task: Task name to use for this file.
-            
-        Returns:
-            Number of successfully processed demos.
-        """
+    def process_episode(
+        self, hdf5_path: Path, dataset: LeRobotDataset, file_task: str
+    ) -> int:
+        """Process HDF5 file containing demo_* folders."""
         processed_count = 0
         try:
             with h5py.File(hdf5_path, "r") as hdf5_file:
-                # Check if data folder exists
                 if "data" not in hdf5_file:
                     logger.warning(f"No 'data' folder found in {hdf5_path.name}")
                     return 0
-                
+
                 data_group = hdf5_file["data"]
-                
-                # Find all demo_* folders
-                demo_folders = sorted([key for key in data_group.keys() if key.startswith("demo_")])
-                
+                demo_folders = sorted(
+                    [key for key in data_group.keys() if key.startswith("demo_")]
+                )
+
                 if not demo_folders:
                     logger.warning(f"No demo_* folders found in {hdf5_path.name}")
                     return 0
-                
-                # Process each demo
+
                 for demo_name in demo_folders:
                     try:
                         demo_group: h5py.Group = data_group[demo_name]
-                        
-                        # Extract task from attributes (try different possible locations)
+
+                        # Task Priority: File Attr > Group Attr > Config Mapping
                         task: str
                         if "task" in hdf5_file.attrs:
                             task = hdf5_file.attrs["task"]
                         elif "task" in demo_group.attrs:
                             task = demo_group.attrs["task"]
                         else:
-                            # Use the task assigned to this file
                             task = file_task
-                        
-                        # Extract actions and states
-                        actions: np.ndarray = demo_group["actions"][:].astype(np.float32)
-                        states: np.ndarray = demo_group["states"][:].astype(np.float32)
-                        
-                        # Extract observations from obs folder
-                        obs_group: h5py.Group = demo_group["obs"]
-                        
-                        # Get specific robot observations: gripper_qpos and joint_pos
-                        gripper_qpos: np.ndarray = obs_group["robot0_gripper_qpos"][:].astype(np.float32)
-                        joint_pos: np.ndarray = obs_group["robot0_joint_pos"][:].astype(np.float32)
-                        robot_observations: np.ndarray = np.concatenate(
+
+                        # Extract data
+                        actions = demo_group["actions"][:].astype(np.float32)
+
+                        obs_group = demo_group["obs"]
+                        gripper_qpos = obs_group["robot0_gripper_qpos"][:].astype(
+                            np.float32
+                        )
+                        joint_pos = obs_group["robot0_joint_pos"][:].astype(np.float32)
+
+                        robot_observations = np.concatenate(
                             [joint_pos, gripper_qpos[:, :1]], axis=1
                         ).astype(np.float32)
-                        
-                        # Extract images
-                        image_data: dict[str, np.ndarray] = {
-                            "agentview": obs_group["agentview_image"][:],
-                            "eye_in_hand": obs_group["robot0_eye_in_hand_image"][:]
-                        }
-                        
-                        # Decode images (currently bypassed - images are already in numpy format)
-                        # TODO: Uncomment if images need BGR to RGB conversion
-                        # decoded_images: dict[str, list[np.ndarray]] = {}
-                        # for img_key, img_data in image_data.items():
-                        #     decoded_images[img_key] = [
-                        #         cv2.cvtColor(img_bytes, cv2.COLOR_BGR2RGB)
-                        #         for img_bytes in img_data
-                        #     ]
-                        decoded_images: dict[str, np.ndarray] = image_data
-                        
-                        # Determine minimum length across all sequences
-                        min_length: int = min(
+
+                        # Image extraction
+                        # Note: Assuming images are already numpy arrays in correct format
+                        agentview_img = obs_group["agentview_image"][:]
+                        eye_in_hand_img = obs_group["robot0_eye_in_hand_image"][:]
+
+                        min_length = min(
                             len(actions),
                             len(robot_observations),
-                            len(decoded_images["agentview"]),
-                            len(decoded_images["eye_in_hand"])
+                            len(agentview_img),
+                            len(eye_in_hand_img),
                         )
-                        
-                        # Add frames to dataset
+
+                        # Add frames
                         for i in range(min_length):
                             dataset.add_frame(
                                 {
-                                    "observation.images.camera_base": decoded_images["agentview"][i],
-                                    "observation.images.camera_wrist_right": decoded_images["eye_in_hand"][i],
-                                    "observation.state": robot_observations[i],
-                                    "action": actions[i],
-                                },
-                                task=task
+                                    "observation.images.camera_base": torch.from_numpy(
+                                        agentview_img[i]
+                                    ),
+                                    "observation.images.camera_wrist_right": torch.from_numpy(
+                                        eye_in_hand_img[i]
+                                    ),
+                                    "observation.state": torch.from_numpy(
+                                        robot_observations[i]
+                                    ),
+                                    "action": torch.from_numpy(actions[i]),
+                                    "task": task,
+                                }
                             )
-                            
 
                         dataset.save_episode()
+
                         processed_count += 1
-                        logger.info(f"Processed {demo_name} from {hdf5_path.name} ({min_length} frames)")
-                        
+                        logger.info(
+                            f"Processed {demo_name} from {hdf5_path.name} ({min_length} frames)"
+                        )
+
                     except Exception as e:
-                        logger.error(f"Error processing {demo_name} in {hdf5_path.name}: {str(e)}")
+                        logger.error(
+                            f"Error processing {demo_name} in {hdf5_path.name}: {str(e)}"
+                        )
                         continue
 
         except Exception as e:
-            print(f"Error processing {hdf5_path.name}: {str(e)}")
-            logger.error(f"Error processing {hdf5_path.name}: {str(e)}")
-        
+            logger.error(f"Error reading file {hdf5_path.name}: {str(e)}")
+
         return processed_count
 
     def run_conversion(self) -> None:
-        """Run the complete conversion process.
-        
-        Finds all HDF5 files, creates the dataset, and processes each episode.
-        """
-        # Find HDF5 files based on input path type
-        episode_files: list[Path]
-        if self.input_path.is_file():
-            # Single file case
-            if not self.input_path.suffix == ".hdf5":
-                raise ValueError(f"Input file must be an HDF5 file (.hdf5), got {self.input_path}")
-            episode_files = [self.input_path]
-            logger.info(f"Processing single file: {self.input_path}")
-        elif self.input_path.is_dir():
-            # Directory case: recursively find all HDF5 files
+        """Run the complete conversion process."""
+        # Find files
+        episode_files: List[Path]
+        if self.cfg.input_path.is_file():
+            if self.cfg.input_path.suffix != ".hdf5":
+                raise ValueError(f"Input file must be .hdf5, got {self.cfg.input_path}")
+            episode_files = [self.cfg.input_path]
+            logger.info(f"Processing single file: {self.cfg.input_path}")
+        elif self.cfg.input_path.is_dir():
             episode_files = sorted(
-                self.input_path.rglob("*.hdf5"),
-                key=lambda x: x.name
+                self.cfg.input_path.rglob("*.hdf5"), key=lambda x: x.name
             )
-            logger.info(f"Found {len(episode_files)} HDF5 files in {self.input_path}")
+            logger.info(
+                f"Found {len(episode_files)} HDF5 files in {self.cfg.input_path}"
+            )
         else:
-            raise FileNotFoundError(f"Input path does not exist: {self.input_path}")
-        
+            raise FileNotFoundError(f"Input path does not exist: {self.cfg.input_path}")
+
         if not episode_files:
-            raise FileNotFoundError(f"No HDF5 files found in {self.input_path}")
+            raise FileNotFoundError(f"No HDF5 files found in {self.cfg.input_path}")
 
-        dataset: LeRobotDataset = self.create_dataset()
-        total_demos: int = 0
+        dataset = self.create_dataset()
+        total_demos = 0
 
-        for file_idx, hdf5_file in enumerate(tqdm(episode_files, desc="Processing HDF5 files")):
+        for file_idx, hdf5_file in enumerate(
+            tqdm(episode_files, desc="Processing HDF5 files")
+        ):
             file_task = self.get_task_for_file(hdf5_file, file_idx)
             logger.info(f"Processing {hdf5_file.name} with task: {file_task}")
+
             demos_processed = self.process_episode(hdf5_file, dataset, file_task)
             total_demos += demos_processed
 
-        logger.info(f"Successfully processed {total_demos} demos from {len(episode_files)} HDF5 files")
+        dataset.finalize()
+        logger.info(
+            f"Successfully processed {total_demos} demos from {len(episode_files)} files"
+        )
 
-def load_config(config_path: str) -> dict[str, Any]:
-    """Load YAML configuration file.
-    
-    Args:
-        config_path: Path to the YAML configuration file.
-        
-    Returns:
-        Configuration dictionary.
-    """
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
+        if self.cfg.push_to_hub:
+            logger.info(f"Pushing dataset to Hugging Face Hub at {self.cfg.repo_id}...")
+            try:
+                dataset.push_to_hub(
+                    private=self.cfg.private_repo,
+                    tags=self.cfg.tags,
+                )
+                logger.info(f"Successfully pushed dataset to {self.cfg.repo_id}")
+            except Exception as e:
+                logger.error(f"Failed to push dataset to hub: {str(e)}")
+                raise
 
 
-@dataclass
-class Args:
-    """Command-line arguments for HDF5 to LeRobot dataset conversion."""
-    
-    config: str = "./configs/lerobot_convert.yaml"
-    """Path to configuration YAML file."""
-    
-    input: str = "./data/mimicgen_generated"
-    """Input file or directory. If a file: convert single HDF5 file. If a directory: recursively convert all HDF5 files in it."""
+def load_yaml_defaults(yaml_path: str) -> dict[str, Any]:
+    """Load YAML file to be used as default values for Tyro."""
+    try:
+        with open(yaml_path, "r") as f:
+            data = yaml.safe_load(f)
+            if not isinstance(data, dict):
+                raise ValueError("YAML content must be a dictionary.")
+            # Convert string path in YAML to Path object for consistency
+            if "input_path" in data:
+                data["input_path"] = Path(data["input_path"])
+            if "output_dir" in data:
+                data["output_dir"] = Path(data["output_dir"])
+            return data
+    except Exception as e:
+        logger.error(f"Failed to load config file: {e}")
+        sys.exit(1)
 
 
 def main() -> None:
-    """Main entry point for the conversion script."""
-    args = tyro.cli(Args)
-    
+    # 1. Handle --config manually before Tyro sees it
+    defaults: LeRobotConfig | None = None
+    # Create a copy of args to modify for Tyro
+    tyro_args = sys.argv[1:]
+
+    if "--config" in sys.argv:
+        try:
+            # Find the index of --config
+            config_idx = sys.argv.index("--config")
+
+            # Ensure the value exists
+            if config_idx + 1 >= len(sys.argv):
+                raise ValueError("--config requires a file path argument")
+
+            config_path = sys.argv[config_idx + 1]
+            defaults = dacite.from_dict(LeRobotConfig, load_yaml_defaults(config_path))
+
+            # Remove --config and its argument from the list passed to Tyro
+            # We filter out exactly these two items
+            tyro_args = [
+                arg
+                for i, arg in enumerate(sys.argv[1:])
+                if i != config_idx - 1 and i != config_idx
+            ]
+
+        except ValueError as e:
+            logger.error(f"Config Error: {e}")
+            sys.exit(1)
+
+    # 2. Parse arguments using Tyro with the cleaned argument list
     try:
-        config = load_config(args.config) 
-        converter = LeRobotDatasetConverter(config, input_path=args.input)
+        # We explicitly pass `args=tyro_args` so Tyro doesn't see '--config'
+        config: LeRobotConfig = tyro.cli(
+            LeRobotConfig, default=defaults, args=tyro_args
+        )
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"Configuration Validation Error: {e}")
+        # Helpful hint if validation failed
+        logger.error(
+            "Tip: Check if your config.yaml contains 'repo_id' and 'input_path'"
+        )
+        sys.exit(1)
+
+    # 3. Execute
+    try:
+        converter = LeRobotDatasetConverter(config)
         converter.run_conversion()
     except Exception as e:
-        logger.error(f"Fatal error: {str(e)}")
+        logger.error(f"Fatal error during execution: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()

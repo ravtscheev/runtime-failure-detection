@@ -1,5 +1,6 @@
+# Template configuration for converting LeRobot HDF5 datasets
 # Repository configuration
-repo_id: "ravtscheev/ur5e-square-nut-pick-place-v1"
+repo-id: "lerobot/ur5e-square-nut-pick-place-v1"
 push_to_hub: true
 private_repo: false
 tags:
@@ -9,8 +10,8 @@ tags:
   - "manipulation"
 
 # Dataset conversion configuration
-input_path: "./data/mimicgen_generated/datasets--amandlek--mimicgen_datasets/snapshots/9bcacb0446b0f895dd352164bd39938710df4a1e/robot/square_d1_ur5e.hdf5"
-output_dir: "./data/lerobot/"
+input_path: "data/lerobot/raw"
+output_dir: "data/lerobot/converted"
 
 # Configuration for converting LeRobot HDF5 datasets
 fps: 20
@@ -21,5 +22,4 @@ task_mapping:
   "threading_d1_ur5e.hdf5": "Pick a needle and thread through a hole on a tripod."
 
 # Batch processing configuration
-# Don't change currently batch use is not working
-batch_size: 1 # Default batch size for processing frames.
+batch_size: 1 # Default batch size for processing frames. Should 
