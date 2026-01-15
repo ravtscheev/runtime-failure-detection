@@ -14,6 +14,8 @@ Usage:
     python convert_lerobot.py --config config.yaml --input-path ./data/new_batch --push-to-hub
 """
 
+# TODO: fix batch processing. Currently leads to error when batch_size > 1
+
 from __future__ import annotations
 
 import logging
@@ -144,9 +146,7 @@ class LeRobotDatasetConverter:
             if file_index < len(mapping):
                 return mapping[file_index]
             else:
-                logger.warning(
-                    f"File index {file_index} exceeds task_mapping length. Using default task."
-                )
+                logger.warning(f"File index {file_index} exceeds task_mapping length. Using default task.")
                 return self.cfg.task
 
         # Dict-based mapping (filename matching)
@@ -181,9 +181,7 @@ class LeRobotDatasetConverter:
             batch_encoding_size=self.cfg.batch_size,
         )
 
-    def process_episode(
-        self, hdf5_path: Path, dataset: LeRobotDataset, file_task: str
-    ) -> int:
+    def process_episode(self, hdf5_path: Path, dataset: LeRobotDataset, file_task: str) -> int:
         """Process HDF5 file containing demo_* folders."""
         processed_count = 0
         try:
@@ -193,9 +191,7 @@ class LeRobotDatasetConverter:
                     return 0
 
                 data_group = hdf5_file["data"]
-                demo_folders = sorted(
-                    [key for key in data_group.keys() if key.startswith("demo_")]
-                )
+                demo_folders = sorted([key for key in data_group.keys() if key.startswith("demo_")])
 
                 if not demo_folders:
                     logger.warning(f"No demo_* folders found in {hdf5_path.name}")
@@ -218,14 +214,10 @@ class LeRobotDatasetConverter:
                         actions = demo_group["actions"][:].astype(np.float32)
 
                         obs_group = demo_group["obs"]
-                        gripper_qpos = obs_group["robot0_gripper_qpos"][:].astype(
-                            np.float32
-                        )
+                        gripper_qpos = obs_group["robot0_gripper_qpos"][:].astype(np.float32)
                         joint_pos = obs_group["robot0_joint_pos"][:].astype(np.float32)
 
-                        robot_observations = np.concatenate(
-                            [joint_pos, gripper_qpos[:, :1]], axis=1
-                        ).astype(np.float32)
+                        robot_observations = np.concatenate([joint_pos, gripper_qpos[:, :1]], axis=1).astype(np.float32)
 
                         # Image extraction
                         # Note: Assuming images are already numpy arrays in correct format
@@ -243,15 +235,9 @@ class LeRobotDatasetConverter:
                         for i in range(min_length):
                             dataset.add_frame(
                                 {
-                                    "observation.images.camera_base": torch.from_numpy(
-                                        agentview_img[i]
-                                    ),
-                                    "observation.images.camera_wrist_right": torch.from_numpy(
-                                        eye_in_hand_img[i]
-                                    ),
-                                    "observation.state": torch.from_numpy(
-                                        robot_observations[i]
-                                    ),
+                                    "observation.images.camera_base": torch.from_numpy(agentview_img[i]),
+                                    "observation.images.camera_wrist_right": torch.from_numpy(eye_in_hand_img[i]),
+                                    "observation.state": torch.from_numpy(robot_observations[i]),
                                     "action": torch.from_numpy(actions[i]),
                                     "task": task,
                                 }
@@ -260,14 +246,10 @@ class LeRobotDatasetConverter:
                         dataset.save_episode()
 
                         processed_count += 1
-                        logger.info(
-                            f"Processed {demo_name} from {hdf5_path.name} ({min_length} frames)"
-                        )
+                        logger.info(f"Processed {demo_name} from {hdf5_path.name} ({min_length} frames)")
 
                     except Exception as e:
-                        logger.error(
-                            f"Error processing {demo_name} in {hdf5_path.name}: {str(e)}"
-                        )
+                        logger.error(f"Error processing {demo_name} in {hdf5_path.name}: {str(e)}")
                         continue
 
         except Exception as e:
@@ -285,12 +267,8 @@ class LeRobotDatasetConverter:
             episode_files = [self.cfg.input_path]
             logger.info(f"Processing single file: {self.cfg.input_path}")
         elif self.cfg.input_path.is_dir():
-            episode_files = sorted(
-                self.cfg.input_path.rglob("*.hdf5"), key=lambda x: x.name
-            )
-            logger.info(
-                f"Found {len(episode_files)} HDF5 files in {self.cfg.input_path}"
-            )
+            episode_files = sorted(self.cfg.input_path.rglob("*.hdf5"), key=lambda x: x.name)
+            logger.info(f"Found {len(episode_files)} HDF5 files in {self.cfg.input_path}")
         else:
             raise FileNotFoundError(f"Input path does not exist: {self.cfg.input_path}")
 
@@ -300,9 +278,7 @@ class LeRobotDatasetConverter:
         dataset = self.create_dataset()
         total_demos = 0
 
-        for file_idx, hdf5_file in enumerate(
-            tqdm(episode_files, desc="Processing HDF5 files")
-        ):
+        for file_idx, hdf5_file in enumerate(tqdm(episode_files, desc="Processing HDF5 files")):
             file_task = self.get_task_for_file(hdf5_file, file_idx)
             logger.info(f"Processing {hdf5_file.name} with task: {file_task}")
 
@@ -310,9 +286,7 @@ class LeRobotDatasetConverter:
             total_demos += demos_processed
 
         dataset.finalize()
-        logger.info(
-            f"Successfully processed {total_demos} demos from {len(episode_files)} files"
-        )
+        logger.info(f"Successfully processed {total_demos} demos from {len(episode_files)} files")
 
         if self.cfg.push_to_hub:
             logger.info(f"Pushing dataset to Hugging Face Hub at {self.cfg.repo_id}...")
@@ -365,11 +339,7 @@ def main() -> None:
 
             # Remove --config and its argument from the list passed to Tyro
             # We filter out exactly these two items
-            tyro_args = [
-                arg
-                for i, arg in enumerate(sys.argv[1:])
-                if i != config_idx - 1 and i != config_idx
-            ]
+            tyro_args = [arg for i, arg in enumerate(sys.argv[1:]) if i != config_idx - 1 and i != config_idx]
 
         except ValueError as e:
             logger.error(f"Config Error: {e}")
@@ -378,17 +348,13 @@ def main() -> None:
     # 2. Parse arguments using Tyro with the cleaned argument list
     try:
         # We explicitly pass `args=tyro_args` so Tyro doesn't see '--config'
-        config: LeRobotConfig = tyro.cli(
-            LeRobotConfig, default=defaults, args=tyro_args
-        )
+        config: LeRobotConfig = tyro.cli(LeRobotConfig, default=defaults, args=tyro_args)
     except SystemExit:
         raise
     except Exception as e:
         logger.error(f"Configuration Validation Error: {e}")
         # Helpful hint if validation failed
-        logger.error(
-            "Tip: Check if your config.yaml contains 'repo_id' and 'input_path'"
-        )
+        logger.error("Tip: Check if your config.yaml contains 'repo_id' and 'input_path'")
         sys.exit(1)
 
     # 3. Execute
