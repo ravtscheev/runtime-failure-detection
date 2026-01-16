@@ -118,14 +118,13 @@ class SpaceMouse(Device):
 
     def __init__(
         self,
-        env,
         vendor_id=macros.SPACEMOUSE_VENDOR_ID,
         product_id=macros.SPACEMOUSE_PRODUCT_ID,
         device_path=None,
         pos_sensitivity=1.0,
         rot_sensitivity=1.0,
     ):
-        super().__init__(env)
+        super().__init__()
 
         ROBOSUITE_DEFAULT_LOGGER.info("Opening SpaceMouse device")
         self.vendor_id = vendor_id
@@ -220,7 +219,6 @@ class SpaceMouse(Device):
         """
         Resets internal state of controller, except for the reset signal.
         """
-        super()._reset_internal_state()
 
         self.rotation = np.array([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
         # Reset 6-DOF variables
@@ -263,7 +261,6 @@ class SpaceMouse(Device):
             raw_drotation=np.array([roll, pitch, yaw]),
             grasp=self.control_gripper,
             reset=self._reset_state,
-            base_mode=int(self.base_mode),
         )
 
     def run(self):
