@@ -3,6 +3,8 @@
 LeRobot Dataset Converter
 Converts HDF5 episode files to LeRobot dataset format for Hugging Face Hub.
 
+Batch processing is not supported with LeRobot 0.4.2 due to a bug. MR #2462 https://github.com/huggingface/lerobot/pull/2462 fixes this.
+
 Usage:
     # 1. Fully manual (Tyro validates required args):
     python convert_lerobot.py --repo-id user/dataset --input-path ./data/raw
@@ -13,8 +15,6 @@ Usage:
     # 3. Config file + Overrides (CLI args take precedence):
     python convert_lerobot.py --config config.yaml --input-path ./data/new_batch --push-to-hub
 """
-
-# TODO: fix batch processing. Currently leads to error when batch_size > 1
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ import dacite
 import tyro
 import yaml
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets.utils import load_episodes
 from tqdm import tqdm
 
 # Configure logging
@@ -176,8 +177,8 @@ class LeRobotDatasetConverter:
             root=self.output_path,
             robot_type=self.cfg.robot_type,
             use_videos=True,
-            image_writer_processes=4,
-            image_writer_threads=16,
+            image_writer_processes=16,
+            image_writer_threads=20,
             batch_encoding_size=self.cfg.batch_size,
         )
 
