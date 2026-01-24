@@ -20,19 +20,18 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import dacite
 import h5py
 import numpy as np
 import torch
-import dacite
 import tyro
 import yaml
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.datasets.utils import load_episodes
 from tqdm import tqdm
 
 # Configure logging
@@ -95,12 +94,12 @@ class LeRobotDatasetConverter:
         self.features: dict[str, dict[str, Any]] = {
             "observation.images.camera_base": {
                 "dtype": "video",
-                "shape": (84, 84, 3),
+                "shape": (224, 224, 3),
                 "names": ["height", "width", "rgb"],
             },
             "observation.images.camera_wrist_right": {
                 "dtype": "video",
-                "shape": (84, 84, 3),
+                "shape": (224, 224, 3),
                 "names": ["height", "width", "rgb"],
             },
             "observation.state": {
