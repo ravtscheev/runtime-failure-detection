@@ -7,3 +7,6 @@
 [submodule "third_party/robomimic"]
 	path = third_party/robomimic
 	url = https://github.com/ARISE-Initiative/robomimic.git
+[submodule "third_party/robosuite-task-zoo"]
+	path = third_party/robosuite-task-zoo
+	url = https://github.com/ARISE-Initiative/robosuite-task-zoo.git
