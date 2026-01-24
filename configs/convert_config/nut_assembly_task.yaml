@@ -1,0 +1,22 @@
+# Repository configuration
+repo_id: "ravtscheev/ur5e-nut-assembly-task"
+push_to_hub: false
+private_repo: false
+tags:
+  - "LeRobot"
+  - "robotics"
+  - "ur5e"
+  - "manipulation"
+
+# Dataset conversion configuration
+input_path: "./data/mimicgen_generated/nut_assembly_UR5e/nut_assembly_task_D0_UR5e/demo.hdf5"
+output_dir: "./data/lerobot/"
+
+# Configuration for converting LeRobot HDF5 datasets
+fps: 20
+robot_type: "ur5e"
+task: "Do something" # Default task name if task_mapping is not provided
+task_mapping:
+  "demo.hdf5": "Pick up the square nut and place it onto the square peg, then pick up the round nut and place it onto the round peg"
+
+batch_size: 4 # Default batch size for processing frames.
