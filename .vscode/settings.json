@@ -1,0 +1,18 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+    },
+    "python.testing.pytestArgs": [
+        "src"
+    ],
+    "python-envs.pythonProjects": [
+        {
+            "path": "runtime-failure-detection/.venv",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        },
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}
