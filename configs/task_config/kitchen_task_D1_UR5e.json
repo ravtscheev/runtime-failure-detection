@@ -1,0 +1,163 @@
+{
+    "name": "kitchen",
+    "type": "robosuite",
+    "experiment": {
+        "name": "kitchen_task_D1_UR5e",
+        "source": {
+            "dataset_path": "/home/tamer/is357_thesis_ws/runtime-failure-detection/third_party/mimicgen/mimicgen/../datasets/source/kitchen.hdf5",
+            "filter_key": null,
+            "n": 10,
+            "start": null
+        },
+        "generation": {
+            "path": "/tmp/core_datasets/kitchen_UR5e",
+            "guarantee": true,
+            "keep_failed": true,
+            "num_trials": 1000,
+            "select_src_per_subtask": false,
+            "transform_first_robot_pose": false,
+            "interpolate_from_last_target_pose": true
+        },
+        "task": {
+            "name": "Kitchen_D1",
+            "robot": "UR5e",
+            "gripper": "Robotiq85Gripper",
+            "env_meta_update_kwargs": {
+                "env_kwargs": {
+                    "render_collision_mesh": false,
+                    "render_visual_mesh": false
+                }
+            },
+            "interface": null,
+            "interface_type": null
+        },
+        "max_num_failures": 25,
+        "render_video": true,
+        "num_demo_to_render": 10,
+        "num_fail_demo_to_render": 25,
+        "log_every_n_attempts": 50,
+        "seed": 1
+    },
+    "obs": {
+        "collect_obs": true,
+        "camera_names": [
+            "agentview",
+            "robot0_eye_in_hand"
+        ],
+        "camera_height": 224,
+        "camera_width": 224
+    },
+    "task": {
+        "task_spec": {
+            "subtask_1": {
+                "object_ref": "button",
+                "subtask_term_signal": "stove_on",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_2": {
+                "object_ref": "pot",
+                "subtask_term_signal": "grasp_pot",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_3": {
+                "object_ref": "stove",
+                "subtask_term_signal": "place_pot_on_stove",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_4": {
+                "object_ref": "bread",
+                "subtask_term_signal": "grasp_bread",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_5": {
+                "object_ref": "pot",
+                "subtask_term_signal": "place_bread_in_pot",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_6": {
+                "object_ref": "serving_region",
+                "subtask_term_signal": "serve",
+                "subtask_term_offset_range": [
+                    10,
+                    20
+                ],
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            },
+            "subtask_7": {
+                "object_ref": "button",
+                "subtask_term_signal": null,
+                "subtask_term_offset_range": null,
+                "selection_strategy": "random",
+                "selection_strategy_kwargs": null,
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": false
+            }
+        }
+    },
+    "meta": {
+        "hp_keys": [
+            "src",
+            "task",
+            "robot",
+            "gripper"
+        ],
+        "hp_values": [
+            "kitchen",
+            "D1",
+            "UR5e",
+            "Robotiq85Gripper"
+        ]
+    }
+}
