@@ -1,5 +1,23 @@
+# Core dependencies for robosuite and mimicgen
 -e third_party/mimicgen
-# Specified by mimicgen
 -e third_party/robosuite
--e third_party/robomimic 
+-e third_party/robomimic
+-e third_party/robosuite-task-zoo
 mujoco==2.3.2
+
+# Additional data collection dependencies
+imageio>=2.9.0
+imageio-ffmpeg
+tqdm>=4.65.0
+termcolor
+pynput
+h5py>=3.7.0
+gdown
+chardet
+huggingface_hub
+
+-e ../openpi-failure-detection 
+
+# For visualization and debugging
+matplotlib>=3.5.0
+opencv-python>=4.5.0
