@@ -1,0 +1,3 @@
+env_name: PickPlace_D0
+prompt: "Place the four objects into four different bins"
+video_out_dir: videos/openpi_ur5e/pick_place_D0

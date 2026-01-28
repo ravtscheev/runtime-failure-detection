@@ -1,0 +1,3 @@
+env_name: Kitchen_D1
+prompt: "Turn on the stove, place the pot on the stove, put the bread into the pot, move the pot to the serving region, and turn off the stove."
+video_out_dir: videos/openpi_ur5e/kitchen_D1

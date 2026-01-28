@@ -1,0 +1,3 @@
+env_name: ThreePieceAssembly_D1
+prompt: "Assemble the structure by inserting the first piece into the base, then inserting the second piece into the first piece."
+video_out_dir: videos/openpi_ur5e/three_piece_assembly_D1
