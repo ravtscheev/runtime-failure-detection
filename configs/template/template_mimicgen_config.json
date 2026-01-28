@@ -1,0 +1,116 @@
+{
+    "name": "Stack_MG_DataGen",
+    "description": "MimicGen data generation config for Stack task",
+    "experiment": {
+        "name": "stack_datagen",
+        "generation": {
+            "path": "demos/stack_synthetic.hdf5",
+            "num_traj": 100,
+            "transform_first_robot_pose": false,
+            "interpolate_from_last_target_pose": false,
+            "start_seed": 0
+        },
+        "source": {
+            "path": "demos/stack_human.hdf5",
+            "demo_keys": null
+        }
+    },
+    "task": {
+        "name": "Stack",
+        "robot": "Panda",
+        "subtasks": [
+            {
+                "name": "reach_cube",
+                "terminal_signal": "eef_near_object",
+                "selection_strategy": "nearest_neighbor_object",
+                "selection_strategy_kwargs": {
+                    "nn_k": 3
+                },
+                "object_ref": "cubeA",
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": true,
+                "subtask_term_offset_range": [
+                    0,
+                    5
+                ]
+            },
+            {
+                "name": "grasp_cube",
+                "terminal_signal": "gripper_closed_object_grasped",
+                "selection_strategy": "nearest_neighbor_object",
+                "selection_strategy_kwargs": {
+                    "nn_k": 3
+                },
+                "object_ref": "cubeA",
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 5,
+                "apply_noise_during_interpolation": true,
+                "subtask_term_offset_range": [
+                    0,
+                    5
+                ]
+            },
+            {
+                "name": "lift_cube",
+                "terminal_signal": "object_above_target",
+                "selection_strategy": "nearest_neighbor_object",
+                "selection_strategy_kwargs": {
+                    "nn_k": 3
+                },
+                "object_ref": "cubeA",
+                "target_ref": "cubeB",
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 0,
+                "apply_noise_during_interpolation": true,
+                "subtask_term_offset_range": [
+                    0,
+                    5
+                ]
+            },
+            {
+                "name": "stack_cube",
+                "terminal_signal": "success",
+                "selection_strategy": "nearest_neighbor_object",
+                "selection_strategy_kwargs": {
+                    "nn_k": 3
+                },
+                "object_ref": "cubeA",
+                "target_ref": "cubeB",
+                "action_noise": 0.05,
+                "num_interpolation_steps": 5,
+                "num_fixed_steps": 5,
+                "apply_noise_during_interpolation": true,
+                "subtask_term_offset_range": [
+                    0,
+                    0
+                ]
+            }
+        ]
+    },
+    "env": {
+        "name": "Stack",
+        "type": "robosuite",
+        "interface_type": "robosuite_mg",
+        "env_kwargs": {
+            "has_renderer": false,
+            "has_offscreen_renderer": true,
+            "ignore_done": true,
+            "use_camera_obs": true,
+            "camera_names": [
+                "agentview",
+                "robot0_eye_in_hand"
+            ],
+            "camera_heights": 256,
+            "camera_widths": 256,
+            "control_freq": 20,
+            "reward_shaping": true
+        },
+        "robots": [
+            "Panda"
+        ]
+    }
+}
