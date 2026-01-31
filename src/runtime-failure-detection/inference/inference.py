@@ -11,6 +11,7 @@ Usage:
 import datetime
 import logging
 import pathlib
+import pickle
 
 import hydra
 import mimicgen  # noqa: F401  # ty:ignore[unresolved-import]
@@ -43,10 +44,17 @@ def main(cfg: Config) -> None:
     np.random.seed(cfg.seed)
 
     logging.info("Loading BASIC composite controller configuration")
-    controller_config = load_controller_config(default_controller="OSC_POSITION")  # Change if needed!
+    controller_config = load_controller_config(default_controller="OSC_POSITION")  # HAMMER NEEDS OSC_POSITION
+
+    # Create timestamped rollout folder
+    ts: str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    rollout_folder = pathlib.Path(cfg.task.video_out_dir) / ts
+    rollout_folder.mkdir(parents=True, exist_ok=True)
+    logging.info(f"Created rollout folder: {rollout_folder}")
 
     # Load policy once (reuse for all trials)
-    policy = load_policy_from_config(cfg)
+    # Enable PolicyRecorder to save policy records to disk
+    policy = load_policy_from_config(cfg, enable_recording=True, record_dir=str(rollout_folder / "policy_records"))
 
     # Track overall results
     results = []
@@ -59,12 +67,13 @@ def main(cfg: Config) -> None:
 
         # Create environment for this trial
         env = make_env(cfg, controller_config)
-        ts: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        writers, temp_paths = setup_writers(cfg, ts)
+        writers, temp_paths = setup_writers(cfg, str(rollout_folder))
 
         success = False
+        rollout_info = {}
         try:
-            success = run_rollout(env, policy, cfg, writers)
+            rollout_info = run_rollout(env, policy, cfg, writers, trial_idx=trial_idx)
+            success = rollout_info.get("success", False)
             results.append(success)
         finally:
             if writers:
@@ -84,6 +93,29 @@ def main(cfg: Config) -> None:
                             new_path = f"{base_path}--trial{trial_idx}--succ{int(success)}.mp4"
                             os.rename(temp_path, new_path)
                             logging.info(f"Renamed {temp_path} -> {new_path}")
+
+                    # Save metadata pickle file
+                    first_cam_path = list(temp_paths.values())[0]
+                    base_meta_path = first_cam_path.rsplit(".", 1)[0]  # Remove .mp4
+                    meta_save_path = f"{base_meta_path}--trial{trial_idx}--succ{int(success)}.pkl"
+
+                    meta_dict = {
+                        "task_env_name": cfg.task.env_name,
+                        "task_prompt": cfg.task.prompt,
+                        "trial_idx": trial_idx,
+                        "episode_success": success,
+                        "steps": rollout_info.get("steps", 0),
+                        "horizon": cfg.horizon,
+                        "replan_steps": cfg.replan_steps,
+                        "resize_size": cfg.resize_size,
+                        "policy_config": cfg.policy_config,
+                        "checkpoint_dir": cfg.checkpoint_dir,
+                        "seed": cfg.seed,
+                        "camera_names": list(cfg.camera_names),
+                        "video_paths": {cam: temp_paths[cam] for cam in temp_paths},
+                    }
+                    pickle.dump(meta_dict, open(meta_save_path, "wb"))
+                    logging.info(f"Saved metadata at {meta_save_path}")
 
             env.close()
             logging.info(f"Trial {trial_idx + 1} completed - Success: {success}")

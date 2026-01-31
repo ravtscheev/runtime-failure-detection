@@ -5,6 +5,7 @@ import os
 from typing import TYPE_CHECKING
 
 import openpi.shared.download as download
+from openpi.policies import policy as _policy
 from openpi.policies import policy_config
 from openpi.training import config as _config
 
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from .config import Config
 
 
-def load_policy_from_config(config: "Config"):
+def load_policy_from_config(config: "Config", enable_recording: bool = False, record_dir: str | None = None):
     """Load an OpenPI policy from configuration.
 
     Args:
@@ -34,4 +35,12 @@ def load_policy_from_config(config: "Config"):
     logging.info(f"Loading policy from checkpoint: {checkpoint_dir}")
     policy = policy_config.create_trained_policy(policy_cfg, checkpoint_dir)
     logging.info("Policy loaded successfully")
+
+    # Wrap with PolicyRecorder if recording is enabled
+    if enable_recording:
+        if record_dir is None:
+            record_dir = "policy_records"
+        logging.info(f"Wrapping policy with PolicyRecorder, saving to: {record_dir}")
+        policy = _policy.PolicyRecorder(policy, record_dir, save_images=True)
+
     return policy

@@ -44,12 +44,12 @@ def make_env(config: "Config", controller_config):
     return env
 
 
-def setup_writers(config: "Config", ts: str) -> tuple[dict, dict]:
+def setup_writers(config: "Config", output_folder: str) -> tuple[dict, dict]:
     """Create video writers for all configured cameras.
 
     Args:
         config: Configuration object with camera and output settings
-        ts: Timestamp string for unique file naming
+        output_folder: Output folder for saving videos
 
     Returns:
         Tuple of (writers dict, temp_paths dict) - temp paths will be renamed with success status later
@@ -59,9 +59,9 @@ def setup_writers(config: "Config", ts: str) -> tuple[dict, dict]:
     writers: dict[str, imageio.core.Format.Writer] = {}
     temp_paths: dict[str, str] = {}
     if config.save_video:
-        logging.info(f"Video recording enabled, saving to: {config.task.video_out_dir}")
+        logging.info(f"Video recording enabled, saving to: {output_folder}")
         for cam in config.camera_names:
-            out_path = f"{config.task.video_out_dir}/ur5e_{config.task.env_name}_{cam}_{ts}.mp4"
+            out_path = f"{output_folder}/ur5e_{config.task.env_name}_{cam}.mp4"
             temp_paths[cam] = out_path
             writers[cam] = imageio.get_writer(out_path, fps=20)
             logging.info(f"Video writer created for {cam}: {out_path}")

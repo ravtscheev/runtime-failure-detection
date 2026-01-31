@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from .config import Config
 
 
-def run_rollout(env, policy, config: "Config", writers: dict) -> bool:
+def run_rollout(env, policy, config: "Config", writers: dict, trial_idx: int = 0) -> dict:
     """Execute a single rollout episode with the policy.
 
     Args:
@@ -17,9 +17,10 @@ def run_rollout(env, policy, config: "Config", writers: dict) -> bool:
         policy: OpenPI policy instance
         config: Configuration object with horizon and replan settings
         writers: Dictionary of video writers for recording
+        trial_idx: Index of the current trial/episode
 
     Returns:
-        bool: True if the task was successful (done=True), False otherwise
+        dict: Dictionary containing success and step count information
     """
     logging.info("Starting rollout")
     action_plan: list[np.ndarray] = []
@@ -51,6 +52,10 @@ def run_rollout(env, policy, config: "Config", writers: dict) -> bool:
                     "observation/base_rgb": base_img,
                     "observation/wrist_rgb": wrist_img,
                     "prompt": config.task.prompt,
+                    # "run/run_note": save_name, TODO: ADD run_note
+                    "run/task_id": config.task.env_name,
+                    "run/episode_idx": trial_idx,
+                    "run/timestep": t,
                 }
 
                 # Infer actions from policy via OpenPI client
@@ -76,4 +81,4 @@ def run_rollout(env, policy, config: "Config", writers: dict) -> bool:
     finally:
         logging.info(f"Rollout finished after {t} steps")
 
-    return done
+    return {"success": done, "steps": t, "episode_success": done}
