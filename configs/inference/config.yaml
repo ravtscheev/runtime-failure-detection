@@ -4,29 +4,34 @@ defaults:
   - _self_
 
 # OpenPI policy configuration
-policy_config: pi0_ur5_merged
-checkpoint_dir: ../openpi-failure-detection/checkpoints/pi0_ur5_merged/merged-training/29999
+policy_config: pi0_ur5_merged_50
+checkpoint_dir: ../openpi-failure-detection/checkpoints/pi0_ur5_merged_50/merged-training-50/29999
 
 # Set the size to which camera images are resized before being passed to the policy
-resize_size: 896
-replan_steps: 16
-horizon: 700
+resize_size: 224
+replan_steps: 5
+num_steps_wait: 10
+# Is already implemented in SAFE code
+same_length: false
 
 # Cameras
 camera_names:
   - agentview
   - robot0_eye_in_hand
-cam_w: 896
-cam_h: 896
+cam_w: 224
+cam_h: 224
 
 # Output video
 save_video: true
 
 # Number of trials to run per task
-num_trials_per_task: 50
+num_trials: 300
 
-seed: 3
+seed: 1 #7 #1 #2 #3
 logging: INFO
+
+# Ignores video_out_dir in tasks and puts everything non hierarchical under save_name
+hierarchical_structure: false
 
 hydra:
   job:

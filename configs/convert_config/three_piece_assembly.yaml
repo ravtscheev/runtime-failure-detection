@@ -1,6 +1,6 @@
 # Repository configuration
-repo_id: "ravtscheev/ur5e-three-piece-assembly"
-push_to_hub: false
+repo_id: "ravtscheev/three-piece-assembly-UR5e-eef-eef"
+push_to_hub: true
 private_repo: false
 tags:
   - "LeRobot"
@@ -9,7 +9,7 @@ tags:
   - "manipulation"
 
 # Dataset conversion configuration
-input_path: "./data/mimicgen_generated/three_piece_assembly_UR5e/three_piece_assembly_task_D1_UR5e/demo.hdf5"
+input_path: "/home/tamer/is357_thesis_ws/runtime-failure-detection/data/mimicgen_generated/three_piece_assembly_UR5e/three_piece_assembly_task_D1_UR5e/demo.hdf5"
 output_dir: "./data/lerobot/"
 
 # Configuration for converting LeRobot HDF5 datasets
@@ -18,5 +18,9 @@ robot_type: "ur5e"
 task: "Do something" # Default task name if task_mapping is not provided
 task_mapping:
   "demo.hdf5": "Assemble the structure by inserting the first piece into the base, then inserting the second piece into the first piece."
+obs_mode: "eef"  # or "joint"
+action_mode: "eef"
+action_key: "actions"
+
 
 batch_size: 4 # Default batch size for processing frames.
