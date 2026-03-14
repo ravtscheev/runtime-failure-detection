@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 """
 LeRobot Dataset Converter
@@ -79,6 +79,23 @@ class LeRobotConfig:
     task_mapping: Optional[Union[Dict[str, str], List[str]]] = None
     """Mapping of files to tasks. Can be a dict (filename->task) or list (order-based)."""
 
+    action_mode: str = "raw"
+    """How to construct the action vector.
+    - 'raw': use the 'actions' key from HDF5 directly (delta OSC actions).
+    - 'abs_joint': reconstruct absolute joint-position targets from next-step
+      robot0_joint_pos + robot0_gripper_qpos.  Shape (7,).  This is what pi0 expects.
+    - 'abs_eef': reconstruct absolute EEF-pose targets from next-step
+      robot0_eef_pos + robot0_eef_quat + gripper.  Shape (8,).
+      NOTE: pi0's DeltaActions transform does simple subtraction, which is only
+      correct for the position dims.  The quaternion dims should be masked out
+      from the delta transform (mask the first 3, skip the last 5).  At
+      inference you must convert the absolute quat target to an axis-angle
+      delta for the OSC_POSE controller yourself.
+    """
+
+    action_key: str = "actions"
+    """HDF5 key for raw actions (only used when action_mode='raw')."""
+
 
 class LeRobotDatasetConverter:
     """Converter for transforming HDF5 robot demonstration data to LeRobot format."""
@@ -92,7 +109,11 @@ class LeRobotDatasetConverter:
         self.output_path: Path = self.cfg.output_dir / f"conversion_{timestamp}"
 
         # Define features (Standard LeRobot structure)
-        self.features: dict[str, dict[str, Any]] = {
+        self.features: dict[str, dict[str, Any]] = self._build_features()
+
+    def _build_features(self) -> dict[str, dict[str, Any]]:
+        """Build feature definitions based on action_mode."""
+        base = {
             "observation.images.camera_base": {
                 "dtype": "video",
                 "shape": (224, 224, 3),
@@ -103,37 +124,36 @@ class LeRobotDatasetConverter:
                 "shape": (224, 224, 3),
                 "names": ["height", "width", "rgb"],
             },
-            "observation.state": {
-                "dtype": "float32",
-                "shape": (7,),
-                "names": {
-                    "motors": [
-                        "joint0",
-                        "joint1",
-                        "joint2",
-                        "joint3",
-                        "joint4",
-                        "joint5",
-                        "gripper",
-                    ]
-                },
-            },
-            "action": {
-                "dtype": "float32",
-                "shape": (7,),
-                "names": {
-                    "motors": [
-                        "joint0",
-                        "joint1",
-                        "joint2",
-                        "joint3",
-                        "joint4",
-                        "joint5",
-                        "gripper",
-                    ]
-                },
-            },
         }
+
+        if self.cfg.action_mode == "abs_eef":
+            # EEF pose: pos(3) + quat(4) + gripper(1) = 8
+            state_names = ["eef_x", "eef_y", "eef_z", "eef_qx", "eef_qy", "eef_qz", "eef_qw", "gripper"]
+            base["observation.state"] = {
+                "dtype": "float32",
+                "shape": (8,),
+                "names": {"motors": state_names},
+            }
+            base["action"] = {
+                "dtype": "float32",
+                "shape": (8,),
+                "names": {"motors": state_names},
+            }
+        else:
+            # Joint-position based (raw / abs_joint): joints(6) + gripper(1) = 7
+            joint_names = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "gripper"]
+            base["observation.state"] = {
+                "dtype": "float32",
+                "shape": (7,),
+                "names": {"motors": joint_names},
+            }
+            base["action"] = {
+                "dtype": "float32",
+                "shape": (7,),
+                "names": {"motors": joint_names},
+            }
+
+        return base
 
     def get_task_for_file(self, file_path: Path, file_index: int) -> str:
         """Get the task name for a given HDF5 file using the config mapping."""
@@ -212,13 +232,41 @@ class LeRobotDatasetConverter:
                             task = file_task
 
                         # Extract data
-                        actions = demo_group["actions"][:].astype(np.float32)
-
                         obs_group = demo_group["obs"]
                         gripper_qpos = obs_group["robot0_gripper_qpos"][:].astype(np.float32)
-                        joint_pos = obs_group["robot0_joint_pos"][:].astype(np.float32)
 
-                        robot_observations = np.concatenate([joint_pos, gripper_qpos[:, :1]], axis=1).astype(np.float32)
+                        if self.cfg.action_mode == "abs_eef":
+                            # ── EEF-pose mode ──────────────────────────────
+                            # State  = [eef_pos(3), eef_quat(4), gripper(1)]  → (8,)
+                            # Action = next-step state
+                            eef_pos = obs_group["robot0_eef_pos"][:].astype(np.float32)  # (T, 3)
+                            eef_quat = obs_group["robot0_eef_quat"][:].astype(np.float32)  # (T, 4)
+                            robot_observations = np.concatenate(
+                                [eef_pos, eef_quat, gripper_qpos[:, :1]], axis=1
+                            ).astype(np.float32)  # (T, 8)
+
+                            actions = robot_observations[1:]  # (T-1, 8)
+                            robot_observations = robot_observations[:-1]
+
+                        elif self.cfg.action_mode == "abs_joint":
+                            # ── Joint-position mode ────────────────────────
+                            joint_pos = obs_group["robot0_joint_pos"][:].astype(np.float32)
+                            robot_observations = np.concatenate([joint_pos, gripper_qpos[:, :1]], axis=1).astype(
+                                np.float32
+                            )
+
+                            next_joints = joint_pos[1:]  # (T-1, 6)
+                            next_gripper = gripper_qpos[1:, :1]  # (T-1, 1)
+                            actions = np.concatenate([next_joints, next_gripper], axis=1).astype(np.float32)  # (T-1, 7)
+                            robot_observations = robot_observations[:-1]
+
+                        else:
+                            # ── Raw mode (delta OSC_POSE as-is) ────────────
+                            joint_pos = obs_group["robot0_joint_pos"][:].astype(np.float32)
+                            robot_observations = np.concatenate([joint_pos, gripper_qpos[:, :1]], axis=1).astype(
+                                np.float32
+                            )
+                            actions = demo_group[self.cfg.action_key][:].astype(np.float32)
 
                         # Image extraction
                         # Note: Assuming images are already numpy arrays in correct format
