@@ -59,4 +59,11 @@ MANIFEST
 # Data collection
 data/*
 rollouts/*
-videos/*
+rollouts_raw/*
+rollouts_filtered/*
+
+# Temporay
+**/data_collection/*
+.hydra/
+unfinished_rollouts/
+finished_rollouts/
