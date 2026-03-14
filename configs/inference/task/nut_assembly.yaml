@@ -1,3 +1,4 @@
 env_name: NutAssembly_D0
 prompt: "Pick up the square nut and place it onto the square peg, then pick up the round nut and place it onto the round peg"
-video_out_dir: videos/openpi_ur5e/nut_assembly_D0
+video_out_dir: nut_assembly_D0
+horizon: 500

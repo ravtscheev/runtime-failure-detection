@@ -1,3 +1,4 @@
 env_name: HammerCleanup_D1
 prompt: "Open the drawer, pick up the hammer, place the hammer into the drawer, and close the drawer."
-video_out_dir: videos/openpi_ur5e/hammer_cleanup_D1
+video_out_dir: hammer_cleanup_D1
+horizon: 420

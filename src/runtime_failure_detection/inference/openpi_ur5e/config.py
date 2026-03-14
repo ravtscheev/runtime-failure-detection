@@ -20,6 +20,7 @@ class TaskConfig:
     env_name: str = MISSING
     prompt: str = MISSING
     video_out_dir: str = MISSING
+    horizon: int = MISSING
 
 
 @dataclasses.dataclass
@@ -48,28 +49,32 @@ class Config:
     checkpoint_dir: str | None = "../openpi-failure-detection/checkpoints/pi0_ur5_merged/merged-training/29999"
 
     # Image processing
-    resize_size: int = 896
-    replan_steps: int = 16
+    resize_size: int = 224
+    replan_steps: int = 15
 
-    # Robosuite task
-    env_name: str = MISSING
-    horizon: int = 700
-    prompt: str = MISSING
+    num_steps_wait: int = 10
+    # Always run the same length and only count success at the final step when enabled.
+    same_length: bool = True
 
     # Cameras
     camera_names: tuple[str, ...] = ("agentview", "robot0_eye_in_hand")
-    cam_w: int = 896
-    cam_h: int = 896
+    cam_w: int = 224
+    cam_h: int = 224
 
     # Output video
     save_video: bool = True
 
     # Trials
-    num_trials_per_task: int = 1
+    num_trials: int = 1
 
     # System
     seed: int | None = 3
     logging: str = "INFO"
+
+    hierarchical_structure: bool = (
+        True  # Ignores video_out_dir in tasks and puts everything non hierarchical under save_name
+    )
+    save_name: str = "pi0-ur5"
 
     task: TaskConfig = MISSING
 
